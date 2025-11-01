@@ -87,7 +87,7 @@
     <string name="birday_import_title">Importera en Birday-säkerhetskopia</string>
     <string name="birday_import_description">Välj en giltig Birday-säkerhetskopia för att manuellt återställa händelserna. Varje befintlig data kommer att skrivas över!</string>
     <string name="birday_export_title">Exportera och dela händelser</string>
-    <string name="birday_export_description">Exportera tillgängliga händelser och dela dem, om du vill. Filen finns i Android/data/com.minar.birday/files</string>
+    <string name="birday_export_description">Exportera tillgängliga händelser och dela dem, om du vill</string>
     <string name="birday_import_success">Importen är klar!</string>
     <string name="birday_import_failure">Importen misslyckades. Valde du filen korrekt?</string>
     <string name="birday_import_invalid_file">Importen misslyckades. Den valda filen är inte en Birday-säkerhetskopia!</string>
@@ -276,8 +276,8 @@
     <!-- Experimental preferences, unclassified -->
     <string name="experimental_settings_title">Experimentella</string>
     <string name="experimental_settings_description">Vissa experimentella eller buggiga inställningar och funktioner. Använd dem på egen risk</string>
-    <string name="experimental_disclaimer">Följande funktioner är experimentella och kanske inte fungerar som de ska. Använd dem på egen risk. Hänvisa till Github för alla framsteg, eftersom några av dessa funktioner kan \"främjas\" och översättas</string>
-    <string name="check_github">Kolla Github</string>
+    <string name="experimental_disclaimer">Följande funktioner är experimentella och kanske inte fungerar som de ska. Använd dem på egen risk. Hänvisa till GitHub för alla framsteg, eftersom några av dessa funktioner kan \"främjas\" och översättas</string>
+    <string name="check_github">Kolla GitHub</string>
     <string name="translate_app">Översätt appen</string>
     <string name="launch_auto_import_title">Automatisk import vid start</string>
     <string name="launch_auto_import_description_off">Birday importerar inte kontakter automatiskt när den startas</string>

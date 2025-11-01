@@ -88,8 +88,7 @@
     <string name="birday_import_title">Importar um backup de Birday</string>
     <string name="birday_import_description">Escolha um ficheiro válido para restaurar os seus eventos. Todos os dados existentes serão removidos!</string>
     <string name="birday_export_title">Exportar e partilhar eventos</string>
-    <string name="birday_export_description">Exporte os eventos para um backup e partilhe-os com quem quiser. O ficheiro foi colocado em
-    Android/data/com.minar.birday/files</string>
+    <string name="birday_export_description">Exporte os eventos para um backup e partilhe-os com quem quiser</string>
     <string name="birday_import_success">Importação terminada!</string>
     <string name="birday_import_failure">Falha ao importar. Escolheu o ficheiro correto?</string>
     <string name="birday_import_invalid_file">Falha ao importar. O ficheiro escolhido não é um backup Birday!</string>
@@ -284,10 +283,10 @@
     <!-- Experimental preferences, unclassified -->
     <string name="experimental_settings_title">Experimental</string>
     <string name="experimental_settings_description">Some experimental or buggy settings and features. Use them at your own risk</string>
-    <string name="experimental_disclaimer">The following features are experimental, and might not work properly. Use them at your own risk. Refer to Github for any progress, since some of this features could be \"promoted\" and translated</string>
-    <string name="check_github">Check Github</string>
+    <string name="experimental_disclaimer">Os seguintes recursos são experimentais e podem não funcionar corretamente. Use-os por sua conta e risco. Consulte GitHub para qualquer progresso, já que algumas dessas funcionalidades podem ser \"promovidas\" e traduzidas</string>
+    <string name="check_github">Verifique o GitHub</string>
     <string name="translate_app">Translate the app</string>
-    <string name="launch_auto_import_title">Auto import on launch</string>
+    <string name="launch_auto_import_title">Importação automática ao iniciar</string>
     <string name="launch_auto_import_description_off">Birday won\'t import contacts automatically when launched</string>
     <string name="launch_auto_import_description_on">Birday will automatically sync with contacts at startup</string>
     <string name="hide_on_scroll_title">Hide navbar on scroll</string>
@@ -301,7 +300,7 @@
     <string name="disable_astrology_description_off">Zodiac information are displayed normally</string>
     <string name="import_json_title">Import from JSON</string>
     <string name="import_json_description">Import from a JSON file. Refer to the wiki on Github for the required file structure</string>
-    <string name="export_json_title">Export to JSON</string>
+    <string name="export_json_title">Exportar como JSON</string>
     <string name="export_json_description">Export each event to a JSON file, image excluded</string>
     <string name="import_csv_title">Import from CSV</string>
     <string name="import_csv_description">Import from a CSV file. Refer to the wiki on Github for the required file structure</string>
@@ -314,8 +313,8 @@
     <string name="auto_export_description_off">To perform a local Birday backup, it has to be executed manually</string>
     <string name="add_demo_entries_title">Add demo entries</string>
     <string name="add_demo_entries_description">Populate the DB with a demo set of events, mostly actors and historical figures</string>
-    <string name="add_demo_entries_dialog_description">This will permanently add THOUSANDS of entries to the DB and is intended for debug purposes. It won\'t delete any existing event, but if you want to delete the new entries, you\'ll need to do it manually. Good luck for that.</string>
-    <string name="delete_db_title">Delete all the events</string>
+    <string name="add_demo_entries_dialog_description">Isto adicionará permanentemente MILHARES de entradas ao banco de dados e destinado apenas para fins de depuração. Não excluirá nenhum evento existente, mas se quiser apagar as novas entradas, será necessário fazê-lo manualmente. Boa sorte com isso.</string>
+    <string name="delete_db_title">Apagar todos os eventos</string>
     <string name="delete_db_description">Simply, nuke the DB. Think twice before clicking!</string>
     <string name="delete_db_dialog_title">Are you sure?</string>
     <string name="delete_db_dialog_description">Make sure to backup your events first, this operation will wipe the DB and should be used for debugging purposes only</string>

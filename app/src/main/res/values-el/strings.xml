@@ -90,8 +90,7 @@
     <string name="birday_import_description">Επιλέξτε ένα έγκυρο αντίγραφο ασφαλείας Birday για να επαναφέρετε τις εκδηλώσεις σας. Όλα τα υπάρχοντα δεδομένα
     θα αντικατασταθούν!</string>
     <string name="birday_export_title">Εξαγωγή και κοινοποίηση εκδηλώσεων</string>
-    <string name="birday_export_description">Μπορείτε να εξάγετε τις διαθέσιμες εκδηλώσεις σε ένα αντίγραφο ασφαλείας και να τις κοινοποιήσετε αν θέλετε. Το αρχείο βρίσκετε στο
-    Android/data/com.minar.birday/files</string>
+    <string name="birday_export_description">Μπορείτε να εξάγετε τις διαθέσιμες εκδηλώσεις σε ένα αντίγραφο ασφαλείας και να τις κοινοποιήσετε αν θέλετε</string>
     <string name="birday_import_success">Η εισαγωγή ολοκληρώθηκε!</string>
     <string name="birday_import_failure">Η εισαγωγή απέτυχε. Διαλέξατε σωστά το αρχείο;</string>
     <string name="birday_import_invalid_file">Η εισαγωγή απέτυχε. Το επιλεγμένο αρχείο δεν είναι αντίγραφο ασφαλείας Birday!</string>
@@ -287,7 +286,7 @@
     <!-- Experimental preferences, unclassified -->
     <string name="experimental_settings_title">Πειραματικές</string>
     <string name="experimental_settings_description">Μερικές πειραματικές ή προβληματικές ρυθμίσεις και λειτουργίες. Χρησιμοποιήστε τις με δική σας ευθύνη</string>
-    <string name="experimental_disclaimer">Τα ακόλουθα χαρακτηριστικά είναι πειραματικά και μπορεί να μη λειτουργούν σωστά. Χρησιμοποιήστε τα με δική σας ευθύνη. Ανατρέξτε στο Github για οποιαδήποτε πρόοδο, καθώς μερικά από αυτά τα χαρακτηριστικά θα μπορούσαν να \"προωθηθούν\" και να μεταφραστούν</string>
+    <string name="experimental_disclaimer">Τα ακόλουθα χαρακτηριστικά είναι πειραματικά και μπορεί να μη λειτουργούν σωστά. Χρησιμοποιήστε τα με δική σας ευθύνη. Ανατρέξτε στο GitHub για οποιαδήποτε πρόοδο, καθώς μερικά από αυτά τα χαρακτηριστικά θα μπορούσαν να \"προωθηθούν\" και να μεταφραστούν</string>
     <string name="check_github">Δείτε το Github</string>
     <string name="translate_app">Μετάφραση της εφαρμογής</string>
     <string name="launch_auto_import_title">Αυτόματη εισαγωγή κατά την εκκίνηση</string>
@@ -318,7 +317,7 @@
     <string name="add_demo_entries_title">Προσθήκη καταχωρήσεων επίδειξης</string>
     <string name="add_demo_entries_description">Γέμισε τη βάση δεδομένων με ένα σύνολο εκδηλώσεων επίδειξης, με κατά βάση ηθοποιούς και ιστορικές προσωπικότητες</string>
     <string name="add_demo_entries_dialog_description">Αυτό θα προσθέσει μόνιμα ΧΙΛΙΑΔΕΣ καταχωρήσεις στη βάση δεδομένων και προορίζεται για σκοπούς αποσφαλμάτωσης. Δε θα διαγράψει οποιαδήποτε υπάρχουσα εκδήλωση, αλλά αν θέλετε να διαγράψετε τις νέες καταχωρήσεις, θα πρέπει να το κάνετε χειροκίνητα. Καλή τύχη με αυτό.</string>
-    <string name="delete_db_title">Διαγραφή όλων των εκδηλώσεων</string>
+    <string name="delete_db_title">Διαγραφή όλων των γεγονότων</string>
     <string name="delete_db_description">Απλώς, διαγράψτε τη Βάση Δεδομένων. Σκεφτείτε το δύο φορές πριν κάνετε κλικ!</string>
     <string name="delete_db_dialog_title">Είστε σίγουρος/η;</string>
     <string name="delete_db_dialog_description">Πρώτα βεβαιωθείτε ότι έχετε δημιουργήσει αντίγραφα ασφαλείας των εκδηλώσεών σας, αυτή η λειτουργία θα διαγράψει τη Βάση Δεδομένων και θα πρέπει να χρησιμοποιηθεί μόνο για σκοπούς εντοπισμού σφαλμάτων</string>

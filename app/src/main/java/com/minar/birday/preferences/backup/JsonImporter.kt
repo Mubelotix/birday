@@ -13,7 +13,6 @@ import com.minar.birday.model.Event
 import com.minar.birday.utilities.LocalDateJsonSerializer
 import com.minar.birday.utilities.normalizeEvent
 import java.time.LocalDate
-import java.util.*
 
 
 class JsonImporter(context: Context, attrs: AttributeSet?) : Preference(context, attrs),
@@ -46,10 +45,16 @@ class JsonImporter(context: Context, attrs: AttributeSet?) : Preference(context,
             val normalizedEvents = mutableListOf<Event>()
             importedEvents.forEach { normalizedEvents.add(normalizeEvent(it)) }
 
-            // Bulk insert, using the standard duplicate detection strategy
-            act.mainViewModel.insertAll(normalizedEvents)
+            // Show dialog to select what to import
             fileStream.close()
-            (context as MainActivity).showSnackbar(context.getString(R.string.birday_import_success))
+            if (normalizedEvents.isEmpty())
+                (context as MainActivity).showSnackbar(context.getString(R.string.import_nothing_found))
+            else
+            // Show the dialog to select the events to import
+                act.showImportDialog(
+                    normalizedEvents,
+                    title = act.getString(R.string.import_json_title)
+                )
         } catch (e: Exception) {
             (context as MainActivity).showSnackbar(context.getString(R.string.birday_import_failure))
             e.printStackTrace()

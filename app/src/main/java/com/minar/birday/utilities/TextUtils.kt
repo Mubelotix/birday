@@ -45,6 +45,8 @@ fun checkName(submission: String): Boolean {
     var ampersandFound = false
     var openParFound = false
     var closedParFound = false
+    var atFound = false
+    var hashFound = false
 
     if (submission == "\'") return false
     if (submission.startsWith('-')) return false
@@ -53,15 +55,20 @@ fun checkName(submission: String): Boolean {
         // Stop when the first invalid character is found
         when {
             // A surely improvable way to support non the red heart and more "ancient" emojis
+            Character.isSurrogate(s) -> continue@loop
             s == '♥' -> continue@loop
             s == '❤' -> continue@loop
             s == '☹' -> continue@loop
             s == '☺' -> continue@loop
             s == '️' -> continue@loop
-            s.isSurrogate() -> continue@loop
+            s == '.' -> continue@loop
+
             // Seems like numbers are allowed in certain countries!
             s.isDigit() -> continue@loop
             s.isLetter() -> continue@loop
+            s == '/' -> continue@loop
+            s == '#' && !hashFound -> hashFound = true
+            s == '@' && !atFound -> atFound = true
             s == '(' && !openParFound -> openParFound = true
             s == ')' && !closedParFound -> closedParFound = true
             s == '-' && !hyphenFound -> hyphenFound = true

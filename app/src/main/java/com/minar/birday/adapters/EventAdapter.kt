@@ -1,7 +1,9 @@
 package com.minar.birday.adapters
 
 import android.content.Context
+import android.graphics.drawable.Animatable2
 import android.graphics.drawable.AnimatedVectorDrawable
+import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,10 +22,10 @@ import com.minar.birday.model.EventResult
 import com.minar.birday.utilities.formatName
 import com.minar.birday.utilities.getNextYears
 import com.minar.birday.utilities.getReducedDate
+import com.minar.birday.utilities.getYears
 import com.minar.birday.utilities.setEventImageOrPlaceholder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -69,7 +71,7 @@ class EventAdapter(
                     mutableList.sortWith(compareBy({ it.name }, { it.surname }))
                 // Base case: insert the header for the first element and initialize the first or last name letter
                 var lastLetter =
-                    if (mutableList.size == 0 || mutableList[0].surname.isNullOrEmpty()) "" else
+                    if (mutableList.isEmpty() || mutableList[0].surname.isNullOrEmpty()) "" else
                         if (surnameFirst) mutableList[0].surname?.get(0)
                             ?: "" else mutableList[0].name[0]
                 organizedEvents.add(EventDataItem.IndexHeader(if (lastLetter == "") "?" else lastLetter.toString()))
@@ -183,15 +185,16 @@ class EventAdapter(
                 formatName(event, sharedPrefs.getBoolean("surname_first", false))
             // If the year isn't considered, show only the day and the month
             val formatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)
-            val originalDate = if (event.yearMatter!!) "${event.originalDate.format(formatter)} - ${
-                String.format(
-                    context.resources.getQuantityString(R.plurals.years, getNextYears(event)),
-                    getNextYears(event)
-                )
-            }"
-            else getReducedDate(event.originalDate).replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-            }
+            val originalDate =
+                if (event.yearMatter!!) "${event.originalDate.format(formatter)} - ${getYears(event)}▶${
+                    String.format(
+                        context.resources.getQuantityString(R.plurals.years, getNextYears(event)),
+                        getNextYears(event)
+                    )
+                }"
+                else getReducedDate(event.originalDate).replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                }
             // The original date row also has the current age
             eventPerson.text = formattedPersonName
             eventDate.text = originalDate
@@ -245,27 +248,49 @@ class EventAdapter(
                 }
             } else eventTypeImage.visibility = View.GONE
 
-            // Manage the favorite/ignored logic TODO finish it
-            if (event.favorite == false) favoriteButton.setImageResource(R.drawable.animated_to_favorite)
-            else favoriteButton.setImageResource(R.drawable.animated_from_favorite)
+            // Manage the normal/favorite/ignored logic
+            when (event.favorite) {
+                null -> favoriteButton.setImageResource(R.drawable.animated_favorite_ignored_to_normal)
+                false -> favoriteButton.setImageResource(R.drawable.animated_favorite_normal_to_favorite)
+                true -> favoriteButton.setImageResource(R.drawable.animated_favorite_favorite_to_ignored)
+            }
             favoriteButton.setOnClickListener {
-                if (event.favorite == true) {
-                    event.favorite = false
-                    activityScope.launch {
-                        updateFavorite(event)
-                        delay(800)
-                        favoriteButton.setImageResource(R.drawable.animated_to_favorite)
+                favoriteButton.isEnabled = false
+                var favoriteDrawable: Int
+                when (event.favorite) {
+                    // Favorite becomes ignored
+                    true -> {
+                        favoriteDrawable = R.drawable.animated_favorite_ignored_to_normal
+                        event.favorite = null
                     }
-                    (favoriteButton.drawable as AnimatedVectorDrawable).start()
-                } else {
-                    event.favorite = true
-                    activityScope.launch {
-                        updateFavorite(event)
-                        delay(800)
-                        favoriteButton.setImageResource(R.drawable.animated_from_favorite)
+                    // Normal becomes favorite
+                    false -> {
+                        favoriteDrawable = R.drawable.animated_favorite_favorite_to_ignored
+                        event.favorite = true
                     }
-                    (favoriteButton.drawable as AnimatedVectorDrawable).start()
+                    // Ignored becomes normal
+                    null -> {
+                        favoriteDrawable = R.drawable.animated_favorite_normal_to_favorite
+                        event.favorite = false
+                    }
                 }
+                updateFavorite(event)
+                val animated = (favoriteButton.drawable as AnimatedVectorDrawable)
+                animated.registerAnimationCallback(object : Animatable2.AnimationCallback() {
+                    override fun onAnimationEnd(drawable: Drawable?) {
+                        // Unregister callback
+                        try {
+                            animated.unregisterAnimationCallback(this)
+                        } catch (_: Exception) { }
+                        animated.reset()
+                        // Avoid state sharing problems
+                        val next = ContextCompat.getDrawable(context, favoriteDrawable)
+                            ?.constantState?.newDrawable()?.mutate()
+                        favoriteButton.setImageDrawable(next)
+                        favoriteButton.isEnabled = true
+                    }
+                })
+                animated.start()
             }
             favoriteButton.setOnLongClickListener {
                 showFavoriteHint()

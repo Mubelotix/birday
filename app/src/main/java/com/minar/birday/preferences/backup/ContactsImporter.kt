@@ -36,6 +36,7 @@ class ContactsImporter(context: Context, attrs: AttributeSet?) : Preference(cont
             shimmer.startShimmer()
             shimmer.showShimmer(true)
         }
+        act.showLoadingIndicator()
         act.vibrate()
         thread {
             importContacts(context)
@@ -44,6 +45,7 @@ class ContactsImporter(context: Context, attrs: AttributeSet?) : Preference(cont
                     shimmer.stopShimmer()
                     shimmer.hideShimmer()
                 }
+                act.hideLoadingIndicator()
                 v.setOnClickListener(this)
             }
         }
@@ -51,7 +53,7 @@ class ContactsImporter(context: Context, attrs: AttributeSet?) : Preference(cont
 
     // Import the contacts from device contacts (not necessarily Google)
     @SuppressLint("MissingPermission")
-    fun importContacts(context: Context): Boolean {
+    fun importContacts(context: Context, withDialog: Boolean? = true): Boolean {
         val act = context as MainActivity
         // Ask for contacts permission
         val permission = act.askContactsPermission(102)
@@ -60,15 +62,25 @@ class ContactsImporter(context: Context, attrs: AttributeSet?) : Preference(cont
         // Insert the remaining events in the db and update the recycler
         val events = contactsRepository.getEventsFromContacts(act.contentResolver)
         return if (events.isEmpty()) {
-            context.runOnUiThread(Runnable {
+            context.runOnUiThread {
                 context.showSnackbar(context.getString(R.string.import_nothing_found))
-            })
+            }
             true
         } else {
-            act.mainViewModel.insertAll(events)
-            context.runOnUiThread(Runnable {
-                context.showSnackbar(context.getString(R.string.import_success))
-            })
+            // Show dialog to select what to import
+            if (withDialog == true)
+                context.runOnUiThread {
+                    act.showImportDialog(
+                        events,
+                        title = act.getString(R.string.import_contacts_title)
+                    )
+                }
+            else {
+                act.mainViewModel.insertAll(events)
+                context.runOnUiThread {
+                    context.showSnackbar(context.getString(R.string.import_success))
+                }
+            }
             true
         }
     }

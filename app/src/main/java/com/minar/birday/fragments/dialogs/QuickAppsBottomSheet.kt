@@ -2,7 +2,6 @@ package com.minar.birday.fragments.dialogs
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.provider.Telephony
 import android.view.LayoutInflater
@@ -17,6 +16,7 @@ import com.minar.birday.adapters.MissedCarouselAdapter
 import com.minar.birday.databinding.BottomSheetQuickAppsBinding
 import java.time.Duration
 import java.time.LocalDate
+import androidx.core.net.toUri
 
 
 class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFragment() {
@@ -96,7 +96,7 @@ class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFra
             try {
                 val dialIntent = Intent(Intent.ACTION_DIAL)
                 act.startActivity(dialIntent)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 act.showSnackbar(act.getString(R.string.no_default_dialer))
             }
             dismiss()
@@ -109,7 +109,7 @@ class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFra
                 val smsIntent: Intent? =
                     act.packageManager.getLaunchIntentForPackage(defaultSmsPackage)
                 act.startActivity(smsIntent)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 act.showSnackbar(act.getString(R.string.no_default_sms))
             }
             dismiss()
@@ -119,12 +119,12 @@ class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFra
             act.vibrate()
             try {
                 val intent = Intent(Intent.ACTION_SENDTO)
-                intent.data = Uri.parse("mailto:")
+                intent.data = "mailto:".toUri()
                 intent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.wishes_birthday))
                 if (intent.resolveActivity(act.packageManager) != null) {
                     startActivity(intent)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 launchOrOpenAppStore("com.google.android.gm")
             }
         }
@@ -150,7 +150,34 @@ class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFra
         carousel.layoutManager = CarouselLayoutManager()
         val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(act)
         val hideImages = sharedPrefs.getBoolean("hide_images", false)
-        carousel.adapter = MissedCarouselAdapter(allEventsFiltered, hideImages)
+        carousel.adapter = MissedCarouselAdapter(allEventsFiltered, hideImages) { event ->
+            // Open contact if exists (no action otherwise). Run in background to avoid UI blocking
+            try {
+                if (requireContext().checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    Thread {
+                        try {
+                            val surname = event.surname ?: ""
+                            val contactId = com.minar.birday.persistence.ContactsRepository()
+                                .findContactIdByName(requireContext().contentResolver, event.name, surname)
+                            if (contactId != null) {
+                                val contactUri = android.content.ContentUris.withAppendedId(
+                                    android.provider.ContactsContract.Contacts.CONTENT_URI,
+                                    contactId.toLong()
+                                )
+                                requireActivity().runOnUiThread {
+                                    try {
+                                        val intent =
+                                            Intent(Intent.ACTION_VIEW, contactUri)
+                                        startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            }
+                        } catch (_: Exception) { }
+                    }.start()
+                }
+            } catch (_: Exception) { }
+        }
+
     }
 
     override fun onDestroyView() {
@@ -164,11 +191,11 @@ class QuickAppsBottomSheet(private val act: MainActivity) : BottomSheetDialogFra
         try {
             val intent = requireContext().packageManager.getLaunchIntentForPackage(packageName)
             requireContext().startActivity(intent)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             startActivity(
                 Intent(
                     Intent.ACTION_VIEW,
-                    Uri.parse("https://play.google.com/store/apps/details?id=${packageName}")
+                    "https://play.google.com/store/apps/details?id=${packageName}".toUri()
                 )
             )
         }

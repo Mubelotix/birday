@@ -1,7 +1,13 @@
 package com.minar.birday.fragments
 
+import android.Manifest
+import android.content.ContentUris
+import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.ContactsContract
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,11 +34,13 @@ import com.minar.birday.fragments.dialogs.InsertEventBottomSheet
 import com.minar.birday.model.Event
 import com.minar.birday.model.EventCode
 import com.minar.birday.model.EventResult
+import com.minar.birday.persistence.ContactsRepository
 import com.minar.birday.utilities.StatsGenerator
 import com.minar.birday.utilities.addInsetsByPadding
 import com.minar.birday.utilities.byteArrayToBitmap
 import com.minar.birday.utilities.formatDaysRemaining
 import com.minar.birday.utilities.formatName
+import com.minar.birday.utilities.formatTextPreview
 import com.minar.birday.utilities.getNextYears
 import com.minar.birday.utilities.getReducedDate
 import com.minar.birday.utilities.getRemainingDays
@@ -108,6 +116,59 @@ class DetailsFragment : Fragment() {
         val editButton = binding.detailsEditButton
         val shareButton = binding.detailsShareButton
         val notesButton = binding.detailsNotesButton
+        val contactButton = binding.detailsContactButton
+
+        // Spawn a contact button if a contact with the same name is found in the contacts (asynchronously)
+        contactButton.visibility = View.INVISIBLE
+        try {
+            if (ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.READ_CONTACTS
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                Thread {
+                    try {
+                        val surname = event.surname ?: ""
+                        val contactId = ContactsRepository()
+                            .findContactIdByName(
+                                requireContext().contentResolver,
+                                event.name,
+                                surname
+                            )
+                        if (contactId != null) {
+                            Log.d("contacts", "Matching contact found for ${event.name}")
+                            requireActivity().runOnUiThread {
+                                contactButton.visibility = View.VISIBLE
+                                contactButton.setOnClickListener {
+                                    try {
+                                        val contactUri = ContentUris.withAppendedId(
+                                            ContactsContract.Contacts.CONTENT_URI,
+                                            contactId.toLong()
+                                        )
+                                        val intent = Intent(Intent.ACTION_VIEW, contactUri)
+                                        startActivity(intent)
+                                    } catch (_: Exception) {
+                                        // Ignore malformed ID
+                                    }
+                                }
+                            }
+                        } else {
+                            Log.d("contacts", "No matching contact for ${event.name}")
+                            requireActivity().runOnUiThread {
+                                // Probably redundant
+                                contactButton.visibility = View.INVISIBLE
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                }.start()
+            } else {
+                contactButton.visibility = View.GONE
+            }
+        } catch (_: Exception) {
+            contactButton.visibility = View.GONE
+        }
+
 
         // Manage the shimmer
         if (shimmerEnabled) {
@@ -470,27 +531,12 @@ class DetailsFragment : Fragment() {
 
     // Share an event as a plain string (plus some explanatory emotes) on every supported app
     private fun shareEvent(event: EventResult) {
-        val formatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
-        var typeEmoji = String(Character.toChars(0x1F973))
-        when (event.type) {
-            EventCode.ANNIVERSARY.name -> typeEmoji = String(Character.toChars(0x1F495))
-            EventCode.DEATH.name -> typeEmoji = String(Character.toChars(0x1FAA6))
-            EventCode.NAME_DAY.name -> typeEmoji = String(Character.toChars(0x1F607))
-            EventCode.OTHER.name -> typeEmoji = String(Character.toChars(0x1F7E2))
-        }
-        val eventInformation =
-            String(Character.toChars(0x1F388)) + "  " +
-                    getString(R.string.notification_title) +
-                    "\n" + typeEmoji + "  " +
-                    formatName(event, sharedPrefs.getBoolean("surname_first", false)) +
-                    " (" + getStringForTypeCodename(requireContext(), event.type!!) +
-                    ")\n" + String(Character.toChars(0x1F56F)) + "  " +
-                    event.nextDate!!.format(formatter) +
-                    // Add a fourth line with the original date, if the year matters
-                    if (event.yearMatter!!)
-                        "\n" + String(Character.toChars(0x1F4C5)) + "  " +
-                                event.originalDate.format(formatter)
-                    else ""
+        val eventInformation = formatTextPreview(
+            event,
+            act,
+            sharedPrefs.getBoolean("surname_first", false),
+            multiline = true
+        )
         ShareCompat.IntentBuilder(requireActivity())
             .setText(eventInformation)
             .setType("text/plain")

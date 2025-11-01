@@ -2,12 +2,12 @@ package com.minar.birday.activities
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.ContentResolver
-import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -24,6 +24,7 @@ import android.os.VibratorManager
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.View
+import android.view.animation.Interpolator
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -37,40 +38,59 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.animation.PathInterpolatorCompat
+import androidx.core.view.isGone
 import androidx.core.view.updatePadding
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import androidx.preference.PreferenceManager
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.minar.birday.R
 import com.minar.birday.databinding.ActivityMainBinding
 import com.minar.birday.fragments.dialogs.ImportContactsBottomSheet
 import com.minar.birday.fragments.dialogs.InsertEventBottomSheet
+import com.minar.birday.model.Event
 import com.minar.birday.model.EventResult
 import com.minar.birday.preferences.backup.BirdayExporter
 import com.minar.birday.preferences.backup.BirdayImporter
 import com.minar.birday.preferences.backup.CalendarExporter
+import com.minar.birday.preferences.backup.CalendarImporter
 import com.minar.birday.preferences.backup.ContactsImporter
+import com.minar.birday.preferences.backup.CsvExporter
 import com.minar.birday.preferences.backup.CsvImporter
+import com.minar.birday.preferences.backup.JsonExporter
 import com.minar.birday.preferences.backup.JsonImporter
 import com.minar.birday.utilities.AppRater
 import com.minar.birday.utilities.addInsetsByMargin
 import com.minar.birday.utilities.addInsetsByPadding
 import com.minar.birday.utilities.applyLoopingAnimatedVectorDrawable
+import com.minar.birday.utilities.eventToResult
+import com.minar.birday.utilities.formatTextPreview
 import com.minar.birday.utilities.getThemeColor
 import com.minar.birday.utilities.resultToEvent
+import com.minar.birday.utilities.shareUri
 import com.minar.birday.utilities.showIfNotAdded
 import com.minar.birday.viewmodels.MainViewModel
 import com.minar.birday.widgets.EventWidgetProvider
 import com.minar.birday.widgets.MinimalWidgetProvider
+import com.minar.birday.workers.ImportContactsWorker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -79,7 +99,7 @@ class MainActivity : AppCompatActivity() {
     internal lateinit var binding: ActivityMainBinding
 
     companion object {
-        val GestureInterpolator = PathInterpolatorCompat.create(0f, 0f, 0f, 1f)
+        val GestureInterpolator: Interpolator = PathInterpolatorCompat.create(0f, 0f, 0f, 1f)
     }
 
     private val navController: NavController
@@ -111,15 +131,15 @@ class MainActivity : AppCompatActivity() {
 
         // Show the introduction for the first launch
         if (sharedPrefs.getBoolean("first", true)) {
-            val editor = sharedPrefs.edit()
-            editor.putBoolean("first", false)
-            // Set default accent based on the Android version
-            when (Build.VERSION.SDK_INT) {
-                in 23..29 -> editor.putString("accent_color", "blue")
-                31 -> editor.putString("accent_color", "system")
-                else -> editor.putString("accent_color", "monet")
+            sharedPrefs.edit {
+                putBoolean("first", false)
+                // Set default accent based on the Android version
+                when (Build.VERSION.SDK_INT) {
+                    in 23..29 -> putString("accent_color", "blue")
+                    31 -> putString("accent_color", "system")
+                    else -> putString("accent_color", "monet")
+                }
             }
-            editor.apply()
             val intent = Intent(this, WelcomeActivity::class.java)
             startActivity(intent)
             finish()
@@ -315,23 +335,46 @@ class MainActivity : AppCompatActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.navigation, null)
 
-        // Hide on scroll, requires restart TODO Only available in experimental settings
+        // Hide on scroll, requires restart TODO Experimental settings
         if (sharedPrefs.getBoolean("hide_scroll", false)) {
             binding.bottomBar.hideOnScroll = true
             binding.navHostFragment.updatePadding(bottom = 0)
         }
 
         // Auto import on launch
-        if (sharedPrefs.getBoolean("auto_import", false)) {
+        val autoImportEnabled = sharedPrefs.getBoolean("auto_import", false)
+        if (autoImportEnabled) {
             val currentLaunchTime = System.currentTimeMillis()
             val lastLaunch = sharedPrefs.getLong("last_launch", 0L)
 
             // Only launch the auto import if 3 minutes are passed
             if (lastLaunch + (3 * 60 * 1000) < currentLaunchTime) {
-                sharedPrefs.edit().putLong("last_launch", currentLaunchTime).apply()
+                sharedPrefs.edit { putLong("last_launch", currentLaunchTime) }
                 thread {
-                    ContactsImporter(this, null).importContacts(this)
+                    ContactsImporter(this, null)
+                        .importContacts(this, withDialog = false)
                 }
+            }
+
+            // Schedule periodic WorkManager job that checks weekly if an import is needed
+            try {
+                val importRequest = PeriodicWorkRequestBuilder<ImportContactsWorker>(
+                    7, TimeUnit.DAYS
+                ).build()
+
+                WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                    "import_contacts_periodic",
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    importRequest
+                )
+            } catch (_: Exception) {
+                // ignore scheduling issues on older devices / vendors
+            }
+        } else {
+            // Cancel any previously scheduled import worker when disabled
+            try {
+                WorkManager.getInstance(this).cancelUniqueWork("import_contacts_periodic")
+            } catch (_: Exception) {
             }
         }
 
@@ -347,17 +390,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // TODO Only available in experimental settings
+        // TODO Experimental settings
         val autoExport = sharedPrefs.getBoolean("auto_export", false)
         val lastExport = sharedPrefs.getLong("last_auto_export", 0)
+        val exportFolderUri = sharedPrefs.getString("export_folder", "")?.toUri()
         // Max one auto export every 30 seconds
         val allowedExportTime = lastExport + 30
         val currentTime = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
         if (autoExport && currentTime > allowedExportTime) {
-            sharedPrefs.edit().putLong("last_auto_export", currentTime).apply()
-            val exporter = BirdayExporter(this, null)
+            sharedPrefs.edit { putLong("last_auto_export", currentTime) }
             val thread = Thread {
-                exporter.exportEvents(this, autoBackup = true)
+                BirdayExporter.exportEvents(this, uri = exportFolderUri, autoBackup = true)
             }
             thread.start()
         }
@@ -382,7 +425,7 @@ class MainActivity : AppCompatActivity() {
         // Manage refresh from settings, since there's a bug where the refresh doesn't work properly
         val refreshed = sharedPrefs.getBoolean("refreshed", false)
         if (refreshed) {
-            sharedPrefs.edit().putBoolean("refreshed", false).apply()
+            sharedPrefs.edit { putBoolean("refreshed", false) }
             super.onSaveInstanceState(outState)
         } else {
             // Dirty, dirty fix to avoid TransactionTooBigException:
@@ -406,7 +449,7 @@ class MainActivity : AppCompatActivity() {
     // Create the NotificationChannel. This code does nothing when it already exists
     private fun createNotificationChannel() {
         val soundUri =
-            Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + applicationContext.packageName + "/" + R.raw.birday_notification)
+            (ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + applicationContext.packageName + "/" + R.raw.birday_notification).toUri()
         val attributes: AudioAttributes = Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
             .build()
@@ -423,7 +466,7 @@ class MainActivity : AppCompatActivity() {
         channel.enableVibration(true)
         // Register the channel with the system
         val notificationManager: NotificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
 
@@ -453,6 +496,64 @@ class MainActivity : AppCompatActivity() {
                 // Invalid file, other errors, can't even try to import
                 e.printStackTrace()
                 showSnackbar(getString(R.string.birday_import_failure))
+            }
+        }
+
+    // Birday DB backup
+    val saveBackup =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            val uri: Uri = result.data?.data ?: return@registerForActivityResult
+            // Save the selected uri to make it accessible for auto backup
+            sharedPrefs.edit(commit = true) { putString("export_folder", uri.toString()) }
+            lifecycleScope.launch {
+                val exportedPath = withContext(Dispatchers.IO) {
+                    BirdayExporter.exportEvents(
+                        applicationContext,
+                        uri,
+                        false
+                    )
+                }
+                if (exportedPath.isNotEmpty()) {
+                    showSnackbar(getString(R.string.birday_export_success))
+                    shareUri(this@MainActivity, uri)
+                } else {
+                    showSnackbar(getString(R.string.birday_export_failure))
+                }
+            }
+        }
+
+    // CSV backup
+    val saveCsv =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch {
+                val exportedPath = withContext(Dispatchers.IO) {
+                    CsvExporter.exportEventsCsv(applicationContext, uri)
+                }
+                if (exportedPath.isNotEmpty()) {
+                    showSnackbar(getString(R.string.birday_export_success))
+                    shareUri(this@MainActivity, uri)
+                } else {
+                    showSnackbar(getString(R.string.birday_export_failure))
+                }
+            }
+        }
+
+    // JSON backup
+    val saveJson =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch {
+                val exportedPath = withContext(Dispatchers.IO) {
+                    JsonExporter.exportEventsJson(applicationContext, uri)
+                }
+                if (exportedPath.isNotEmpty()) {
+                    showSnackbar(getString(R.string.birday_export_success))
+                    shareUri(this@MainActivity, uri)
+                } else {
+                    showSnackbar(getString(R.string.birday_export_failure))
+                }
             }
         }
 
@@ -490,7 +591,7 @@ class MainActivity : AppCompatActivity() {
         // Deprecated for no reason
         val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vibratorManager =
-                this.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                this.getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
@@ -542,6 +643,16 @@ class MainActivity : AppCompatActivity() {
         snackbar.show()
     }
 
+    // Show a generic loading indicator
+    fun showLoadingIndicator() {
+        binding.birdayLoadingIndicator.visibility = View.VISIBLE
+    }
+
+    // Hide the generic loading indicator
+    fun hideLoadingIndicator() {
+        binding.birdayLoadingIndicator.visibility = View.GONE
+    }
+
     // Insert a previously deleted event back in the database
     fun insertBack(eventResult: EventResult) {
         mainViewModel.insert(resultToEvent(eventResult))
@@ -565,7 +676,7 @@ class MainActivity : AppCompatActivity() {
             deleteFab.layoutParams as CoordinatorLayout.LayoutParams
 
         // Case 1: add fab currently hidden, it needs to be active
-        if (!active && addFab.visibility == View.GONE) {
+        if (!active && addFab.isGone) {
             // Change anchors to avoid visual problems
             addParams.anchorId = bottomBarId
             addFab.layoutParams = addParams
@@ -588,7 +699,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Case 2: delete fab currently hidden, it needs to be active
-        if (active && deleteFab.visibility == View.GONE) {
+        if (active && deleteFab.isGone) {
             // Change anchors to avoid visual problems
             addParams.anchorId = View.NO_ID
             addFab.layoutParams = addParams
@@ -609,6 +720,76 @@ class MainActivity : AppCompatActivity() {
                 5000L,
             )
         }
+    }
+
+    // Show a dialog to select the events to import
+    fun showImportDialog(
+        events: List<Event>,
+        title: String? = null,
+        message: String? = null,
+        icon: Int = R.drawable.ic_backup_restore_24dp,
+        showSnack: Boolean = true,
+        onInserted: (() -> Unit)? = null
+    ) {
+        // Shouldn't happen
+        if (events.isEmpty()) return
+
+        // Prepare the dialog content
+        val sp = PreferenceManager.getDefaultSharedPreferences(this)
+        val surnameFirst = sp.getBoolean("surname_first", false)
+        val items: Array<CharSequence> = events.map { ev ->
+            formatTextPreview(
+                eventToResult(ev),
+                this,
+                surnameFirst = surnameFirst,
+                multiline = false
+            )
+        }.toTypedArray()
+
+        // Default: all the events are unselected
+        val checked = BooleanArray(items.size) { false }
+
+        val builder = MaterialAlertDialogBuilder(this)
+        if (!title.isNullOrBlank()) builder.setTitle(title)
+        if (!message.isNullOrBlank()) builder.setMessage(message)
+        builder.setIcon(icon)
+
+        builder.setMultiChoiceItems(items, checked) { _, which, isChecked ->
+            checked[which] = isChecked
+        }
+            .setPositiveButton(android.R.string.ok) { dialogInterface, _ ->
+                val toInsert = events.filterIndexed { i, _ -> checked[i] }
+                if (toInsert.isNotEmpty()) {
+                    mainViewModel.insertAll(toInsert)
+                    if (showSnack) {
+                        showSnackbar(getString(R.string.import_success))
+                    }
+                    onInserted?.invoke()
+                } else {
+                    if (showSnack) showSnackbar(getString(R.string.import_nothing_found))
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton(android.R.string.selectAll, null)
+
+        val dialog = builder.create()
+
+        dialog.setOnShowListener {
+            val neutralButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            val listView = dialog.listView
+            neutralButton.setOnClickListener {
+                val allSelected = checked.all { it }
+                val newValue = !allSelected
+                for (i in checked.indices) {
+                    checked[i] = newValue
+                    listView.setItemChecked(i, newValue)
+                }
+            }
+            listView.setOnItemClickListener { _, _, position, _ ->
+                checked[position] = listView.isItemChecked(position)
+            }
+        }
+        dialog.show()
     }
 
     // Ask contacts permission
@@ -719,7 +900,8 @@ class MainActivity : AppCompatActivity() {
                             action = fun() {
                                 askContactsPermission()
                             })
-                    else showSnackbar(getString(R.string.missing_permission_contacts_forever),
+                    else showSnackbar(
+                        getString(R.string.missing_permission_contacts_forever),
                         actionText = getString(R.string.title_settings),
                         action = fun() {
                             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -739,11 +921,11 @@ class MainActivity : AppCompatActivity() {
                             getString(R.string.missing_permission_notifications),
                             actionText = getString(R.string.cancel),
                             action =
-                            fun() {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    askNotificationPermission()
-                                }
-                            })
+                                fun() {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        askNotificationPermission()
+                                    }
+                                })
                     else showSnackbar(
                         getString(R.string.missing_permission_notifications_forever),
                         actionText = getString(R.string.title_settings),
@@ -774,12 +956,12 @@ class MainActivity : AppCompatActivity() {
                                 data = Uri.fromParts("package", packageName, null)
                             })
                         })
-                }
-                else {
-                    val calendarExporter = CalendarExporter(this, null)
-                    calendarExporter.exportCalendar(this)
+                } else {
+                    val calendarImporter = CalendarImporter(this, null)
+                    calendarImporter.importCalendar(this)
                 }
             }
+
             402 -> {
                 if (grantResults.isNotEmpty() && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                     if (shouldShowRequestPermissionRationale(Manifest.permission.WRITE_CALENDAR))
@@ -797,8 +979,7 @@ class MainActivity : AppCompatActivity() {
                                 data = Uri.fromParts("package", packageName, null)
                             })
                         })
-                }
-                else {
+                } else {
                     val calendarExporter = CalendarExporter(this, null)
                     calendarExporter.exportCalendar(this)
                 }
